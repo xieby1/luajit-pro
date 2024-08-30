@@ -1,6 +1,6 @@
 #!/bin/bash
 
-luajit_dir=$(pwd)/luajit2
+luajit_dir=$(pwd)/luajit2.1
 luajit_backup_dir=$(pwd)/luajit_backup
 patch_dir=$(pwd)/patch
 
