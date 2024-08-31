@@ -148,6 +148,7 @@ static const char *reader_file(lua_State *L, void *ud, size_t *size)
       } else {
         // The read file did not contains "--[[verilua]]"
       }
+      fseek(ctx->fp, 0, SEEK_SET);
     } else {
       assert(0 && "Cannot read the file!");
     }
