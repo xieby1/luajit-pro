@@ -32,27 +32,35 @@ char *file_transform(const char *filename, LuaDoStringPtr func);
 void string_transform(const char *str, size_t *output_size);
 void luaL_openlibs(lua_State *L);
 
-const char *do_lua_stiring(const char *code_str) {
-  static lua_State* L;
-  static char init = 0;
-  if (init == 0) {
-    init = 1;
-    L = luaL_newstate();
-    luaL_openlibs(L);
-  }
+const char *do_lua_stiring(const char *str) {
+    static lua_State *L;
+    static char init = 0;
+    if (init == 0) {
+        init = 1;
+        L    = luaL_newstate();
+        luaL_openlibs(L);
+    }
 
-  if (luaL_dostring(L, code_str) != LUA_OK) {
-    lua_close(L);
-    printf("code_str >>> \n%s\n<<<\n", code_str);
-    assert(0 && "Error executing luaCode");
-  }
+    // Execute the Lua string
+    if (luaL_dostring(L, str) != LUA_OK) {
+        // If execution fails, get the error message
+        const char *errorMsg = lua_tostring(L, -1);
+        printf("Error executing Lua code: %s\n", errorMsg);
+        
+        // Clean up the stack by popping the error message
+        lua_pop(L, 1); // Remove the error message from the stack
 
-  if (lua_isstring(L, -1)) {
-    return lua_tostring(L, -1);
-  } else {
-    return "";
-      // assert(0 && "Error: Lua did not return a string");
-  }
+        lua_close(L); // Close the Lua state
+        printf("code_str >>> \n%s\n<<<\n", str);
+        assert(0 && "Error executing luaCode");
+    }
+    
+    if (lua_isstring(L, -1)) {
+        return lua_tostring(L, -1);
+    } else {
+        return "";
+        // assert(0 && "Error: Lua did not return a string");
+    }
 }
 
 #endif // LUAJIT_SYNTAX_EXTEND

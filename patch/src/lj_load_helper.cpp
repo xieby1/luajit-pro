@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <regex>
 #include <sstream>
 #include <string>
 #include <unistd.h>
@@ -37,6 +38,7 @@ enum class TokenKind {
     Number,
     Symbol,
     CompTime,
+    Include,
     EndOfFile,
     Unknown,
 };
@@ -96,6 +98,8 @@ std::string toString(TokenKind kind) {
         return "Symbol";
     case TokenKind::CompTime:
         return "CompTime";
+    case TokenKind::Include:
+        return "Include";
     case TokenKind::EndOfFile:
         return "EndOfFile";
     case TokenKind::Unknown:
@@ -133,10 +137,16 @@ class CustomLuaTransformer {
 
     Token _nextToken();
     Token nextToken();
+
+    std::string getContentBetween(Token &startToken, Token &endToken);
+    void replaceContentBetween(int line, Token &startToken, Token &endToken, std::string content);
+    void replaceContent(int line, std::string content);
+
     void parseForeach(int idx);
     void parseMap(int idx);
     void parseFilter(int idx);
     void parseCompTime(int idx);
+    void parseInclude(int idx);
 };
 
 CustomLuaTransformer::CustomLuaTransformer(const std::string &filename) : filename_(filename) {
@@ -283,6 +293,8 @@ Token CustomLuaTransformer::_nextToken() {
         // Check if the token is $comp_time
         if (result.str() == "$comp_time") {
             return Token(TokenKind::CompTime, result.str(), startLine, startColumn, currentLine_, currentColumn_);
+        } else if (result.str() == "$include") {
+            return Token(TokenKind::Include, result.str(), startLine, startColumn, currentLine_, currentColumn_);
         } else {
             return Token(TokenKind::Symbol, result.str(), startLine, startColumn, currentLine_, currentColumn_);
         }
@@ -323,6 +335,27 @@ void CustomLuaTransformer::tokenize() {
         if (token.kind == TokenKind::EndOfFile)
             break;
     }
+}
+
+std::string CustomLuaTransformer::getContentBetween(Token &startToken, Token &endToken) {
+    std::string content;
+    if (startToken.startLine == endToken.startLine) {
+        content += oldContentLines[startToken.startLine - 1].substr(startToken.endColumn, endToken.startColumn - startToken.endColumn);
+    } else {
+        for (int i = startToken.startLine; i <= endToken.startLine; i++) {
+            if (i == startToken.startLine) {
+                content += oldContentLines[i - 1].substr(startToken.endColumn);
+                content += "\n";
+            } else if (i == endToken.startLine) {
+                content += oldContentLines[i - 1].substr(0, endToken.startColumn);
+                content += "\n";
+            } else {
+                content += oldContentLines[i - 1];
+                content += "\n";
+            }
+        }
+    }
+    return content;
 }
 
 void CustomLuaTransformer::parseForeach(int idx) {
@@ -781,7 +814,6 @@ void CustomLuaTransformer::parseCompTime(int idx) {
     ASSERT(tokenVec.at(_idx).data == "{");
     leftBracketToken = tokenVec.at(_idx);
 
-    std::string compTimeContent;
     _idx++;
     bracketCnt++;
 
@@ -799,24 +831,11 @@ void CustomLuaTransformer::parseCompTime(int idx) {
     rightBracketToken = tokenVec.at(_idx - 1);
     ASSERT(rightBracketToken.data == "}");
 
-    if (leftBracketToken.startLine == rightBracketToken.startLine) {
-        compTimeContent += oldContentLines[leftBracketToken.startLine - 1].substr(leftBracketToken.endColumn, rightBracketToken.startColumn);
-    } else {
-        for (int i = leftBracketToken.startLine; i <= rightBracketToken.startLine; i++) {
-            if (i == leftBracketToken.startLine) {
-                compTimeContent += oldContentLines[i - 1].substr(leftBracketToken.endColumn);
-            } else if (i == rightBracketToken.startLine) {
-                compTimeContent += oldContentLines[i - 1].substr(0, rightBracketToken.startColumn);
-            } else {
-                compTimeContent += oldContentLines[i - 1];
-            }
-        }
-    }
-
     processedTokenLines.insert(compTimeToken.startLine);
     processedTokenColumns.insert(compTimeToken.startColumn);
 
-    std::string luaCode = ludDoString(compTimeContent.c_str());
+    std::string compTimeContent = getContentBetween(leftBracketToken, rightBracketToken);
+    std::string luaCode         = ludDoString(compTimeContent.c_str());
 
     if (replacedTokenLines.count(compTimeToken.startLine) > 0 && replacedTokenColumns.count(compTimeToken.startColumn) > 0) {
         return;
@@ -830,6 +849,115 @@ void CustomLuaTransformer::parseCompTime(int idx) {
     }
     oldContentLines[compTimeToken.startLine - 1] = "--[[comp_time]] ";
     oldContentLines[leftBracketToken.startLine - 1] += luaCode;
+}
+
+void CustomLuaTransformer::parseInclude(int idx) {
+    int bracketCnt = 0;
+    int _idx       = idx;
+
+    while (tokenVec.at(_idx).kind != TokenKind::Include) {
+        _idx++;
+        if (tokenVec.at(_idx).kind == TokenKind::EndOfFile) {
+            return;
+        }
+    }
+
+    Token includeToken = tokenVec.at(_idx);
+    Token leftBracketToken;
+    Token rightBracketToken;
+
+    if (processedTokenLines.count(includeToken.startLine) > 0 && processedTokenColumns.count(includeToken.startColumn) > 0) {
+        return;
+    }
+
+    _idx++;
+    leftBracketToken = tokenVec.at(_idx);
+    ASSERT(leftBracketToken.data == "(");
+
+    _idx++;
+    bracketCnt++;
+    while (bracketCnt != 0) {
+        auto token = tokenVec.at(_idx);
+        std::cout << token.startLine << " = " << token.data << std::endl;
+
+        if (token.data == "(") {
+            bracketCnt++;
+        } else if (token.data == ")") {
+            bracketCnt--;
+        }
+
+        _idx++;
+    }
+
+    rightBracketToken = tokenVec.at(_idx - 1);
+    ASSERT(rightBracketToken.data == ")");
+
+    processedTokenLines.insert(includeToken.startLine);
+    processedTokenColumns.insert(includeToken.startColumn);
+
+    std::string includePackage = getContentBetween(leftBracketToken, rightBracketToken);
+
+    std::string luaCode = std::string("return assert(package.searchpath(") + includePackage + ", package.path))";
+    auto includeFile    = ludDoString(luaCode.c_str());
+
+    std::ifstream file(includeFile);
+    std::string includeContent = "";
+
+    if (file.is_open()) {
+        std::string line;
+        while (std::getline(file, line)) {
+
+            // Regular expressions for Lua comments
+            std::regex singleLineComment(R"(--[^\n]*)");
+            std::regex multiLineComment(R"(--\[\[[\s\S]*?\]\])");
+            std::string result = line;
+
+            // Replace multi-line comments
+            auto multiLineBegin = std::sregex_iterator(result.begin(), result.end(), multiLineComment);
+            auto multiLineEnd   = std::sregex_iterator();
+
+            for (std::sregex_iterator i = multiLineBegin; i != multiLineEnd; ++i) {
+                result.replace(i->position(), i->length(), "");
+            }
+
+            // Replace single-line comments
+            auto singleLineBegin = std::sregex_iterator(result.begin(), result.end(), singleLineComment);
+            auto singleLineEnd   = std::sregex_iterator();
+
+            for (std::sregex_iterator i = singleLineBegin; i != singleLineEnd; ++i) {
+                result.replace(i->position(), i->length(), "");
+            }
+
+            includeContent += result + " ";
+        }
+
+        file.close();
+    } else {
+        std::cerr << "Unable to open file" << std::endl;
+        ASSERT(false);
+    }
+
+    if (replacedTokenLines.count(includeToken.startLine) > 0 && replacedTokenColumns.count(includeToken.startColumn) > 0) {
+        return;
+    } else {
+        replacedTokenLines.insert(includeToken.startLine);
+        replacedTokenColumns.insert(includeToken.startColumn);
+    }
+
+    // TODO: do file transform in the include file
+    if (leftBracketToken.startLine == rightBracketToken.startLine) {
+        oldContentLines[leftBracketToken.startLine - 1] = includeContent;
+    } else {
+        for(int i = includeToken.startLine; i <= rightBracketToken.startLine; i++) {
+            if(i == includeToken.startLine) {
+                oldContentLines[i - 1] = includeContent;
+            } else {
+                oldContentLines[i - 1] = "--[[line keeper]]";
+            }
+        }
+    }
+
+    std::cout << "get Include " << includeContent << std::endl;
 }
 
 void CustomLuaTransformer::parse(int idx) {
@@ -850,6 +978,9 @@ void CustomLuaTransformer::parse(int idx) {
             break;
         case TokenKind::CompTime:
             parseCompTime(_idx);
+            break;
+        case TokenKind::Include:
+            parseInclude(_idx);
             break;
         default:
             break;
@@ -923,7 +1054,7 @@ const char *file_transform(const char *filename, LuaDoStringPtr func) {
 
     std::ofstream outFile(filepath, std::ios::trunc);
     if (!outFile.is_open()) {
-        assert(false && "Cannot write file!\n");
+        assert(false && "Cannot write file!");
     }
 
     for (const auto &line : transformer.oldContentLines) {
