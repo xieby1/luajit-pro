@@ -39,6 +39,30 @@ const char *do_lua_stiring(const char *str) {
         init = 1;
         L    = luaL_newstate();
         luaL_openlibs(L);
+
+        // Utility functions for rendering templates
+        const char *code_str = 
+          "getmetatable('').__index.render = function(template, vars)\n"
+          "  assert(type(template) == \"string\", \"template must be a string\")\n"
+          "  assert(type(vars) == \"table\", \"vars must be a table\")\n"
+          "  return (template:gsub(\"{{(.-)}}\", function(key)\n"
+          "    assert(vars[key], string.format(\"[render] key not found: %s\\n\\ttemplate_str is: %s\\n\", key, template))\n"
+          "    return tostring(vars[key] or \"\")\n"
+          "  end))\n"
+          "end\n";
+
+        if (luaL_dostring(L, code_str) != LUA_OK) {
+          // If execution fails, get the error message
+          const char *errorMsg = lua_tostring(L, -1);
+          printf("Error executing Lua code: %s\n", errorMsg);
+          
+          // Clean up the stack by popping the error message
+          lua_pop(L, 1); // Remove the error message from the stack
+
+          lua_close(L); // Close the Lua state
+          printf("code_str >>> \n%s\n<<<\n", code_str);
+          assert(0 && "Error executing luaCode");
+        }
     }
 
     // Execute the Lua string
