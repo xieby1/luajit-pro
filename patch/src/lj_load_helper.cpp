@@ -13,7 +13,7 @@
 #include <unordered_set>
 #include <vector>
 
-typedef const char *(*LuaDoStringPtr)(const char *);
+typedef const char *(*LuaDoStringPtr)(const char*, const char *);
 
 #define ASSERT(condition, ...)                                                                                                                                                                                                                                                                                                                                                                                 \
     do {                                                                                                                                                                                                                                                                                                                                                                                                       \
@@ -26,7 +26,7 @@ typedef const char *(*LuaDoStringPtr)(const char *);
 namespace lua_transformer {
 std::vector<std::string> removeFiles;
 
-LuaDoStringPtr ludDoString = nullptr; // Used for generate compile time code
+LuaDoStringPtr luaDoString = nullptr; // Used for generate compile time code
 
 enum class TokenKind {
     Identifier,
@@ -803,11 +803,21 @@ void CustomLuaTransformer::parseCompTime(int idx) {
         }
     }
 
+    // compTimeToken [ "(" <compTimeName> ")" ] leftBracketToken <compTimeContent> rightBracketToken
     Token compTimeToken = tokenVec.at(_idx);
+    Token compTimeNameOpt;
     Token leftBracketToken;
     Token rightBracketToken;
     if (processedTokenLines.count(compTimeToken.startLine) > 0 && processedTokenColumns.count(compTimeToken.startColumn) > 0) {
         return;
+    }
+
+    if (tokenVec.at(_idx + 1).data == "(") {
+        compTimeNameOpt = tokenVec.at(_idx + 2);
+        ASSERT(tokenVec.at(_idx + 3).data == ")");
+        _idx = _idx + 3;
+    } else {
+        compTimeNameOpt.data = "Unknown";
     }
 
     _idx++;
@@ -835,7 +845,7 @@ void CustomLuaTransformer::parseCompTime(int idx) {
     processedTokenColumns.insert(compTimeToken.startColumn);
 
     std::string compTimeContent = getContentBetween(leftBracketToken, rightBracketToken);
-    std::string luaCode         = ludDoString(compTimeContent.c_str());
+    std::string luaCode         = luaDoString(std::string(filename_ + "/compTime/" + compTimeNameOpt.data + ":" + std::to_string(compTimeToken.startLine)).c_str(), compTimeContent.c_str());
 
     if (replacedTokenLines.count(compTimeToken.startLine) > 0 && replacedTokenColumns.count(compTimeToken.startColumn) > 0) {
         return;
@@ -891,6 +901,7 @@ void CustomLuaTransformer::parseInclude(int idx) {
 
     rightBracketToken = tokenVec.at(_idx - 1);
     ASSERT(rightBracketToken.data == ")");
+    ASSERT(leftBracketToken.startLine == rightBracketToken.startLine);
 
     processedTokenLines.insert(includeToken.startLine);
     processedTokenColumns.insert(includeToken.startColumn);
@@ -898,7 +909,7 @@ void CustomLuaTransformer::parseInclude(int idx) {
     std::string includePackage = getContentBetween(leftBracketToken, rightBracketToken);
 
     std::string luaCode = std::string("return assert(package.searchpath(") + includePackage + ", package.path))";
-    auto includeFile    = ludDoString(luaCode.c_str());
+    auto includeFile    = luaDoString(std::string(filename_ + "/include" + ":" + std::to_string(includeToken.startLine)).c_str(), luaCode.c_str());
 
     std::ifstream file(includeFile);
     std::string includeContent = "";
@@ -948,8 +959,8 @@ void CustomLuaTransformer::parseInclude(int idx) {
     if (leftBracketToken.startLine == rightBracketToken.startLine) {
         oldContentLines[leftBracketToken.startLine - 1] = includeContent;
     } else {
-        for(int i = includeToken.startLine; i <= rightBracketToken.startLine; i++) {
-            if(i == includeToken.startLine) {
+        for (int i = includeToken.startLine; i <= rightBracketToken.startLine; i++) {
+            if (i == includeToken.startLine) {
                 oldContentLines[i - 1] = includeContent;
             } else {
                 oldContentLines[i - 1] = "--[[line keeper]]";

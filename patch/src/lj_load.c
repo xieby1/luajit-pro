@@ -25,65 +25,76 @@
 
 #ifdef LUAJIT_SYNTAX_EXTEND
 #include "assert.h"
+#include <stdlib.h>
 
-
-typedef const char *(* LuaDoStringPtr)(const char*);
+typedef const char *(* LuaDoStringPtr)(const char*, const char*);
 char *file_transform(const char *filename, LuaDoStringPtr func);
 void string_transform(const char *str, size_t *output_size);
 void luaL_openlibs(lua_State *L);
 
-const char *do_lua_stiring(const char *str) {
+const char *do_lua_stiring(const char *code_name, const char *str) {
     static lua_State *L;
     static char init = 0;
+    static char verbose = 0;
     if (init == 0) {
-        init = 1;
-        L    = luaL_newstate();
-        luaL_openlibs(L);
+      init = 1;
 
-        // Utility functions for rendering templates
-        const char *code_str = 
-          "getmetatable('').__index.render = function(template, vars)\n"
-          "  assert(type(template) == \"string\", \"template must be a string\")\n"
-          "  assert(type(vars) == \"table\", \"vars must be a table\")\n"
-          "  return (template:gsub(\"{{(.-)}}\", function(key)\n"
-          "    assert(vars[key], string.format(\"[render] key not found: %s\\n\\ttemplate_str is: %s\\n\", key, template))\n"
-          "    return tostring(vars[key] or \"\")\n"
-          "  end))\n"
-          "end\n";
+      char *value = getenv("LJP_VERBOSE_DO_STRING");
+      if (value != NULL && strcmp(value, "1") == 0) {
+          verbose = 1;
+          printf("[luajit-pro] LJP_VERBOSE_DO_STRING is enabled!\n");
+      }
 
-        if (luaL_dostring(L, code_str) != LUA_OK) {
-          // If execution fails, get the error message
-          const char *errorMsg = lua_tostring(L, -1);
-          printf("Error executing Lua code: %s\n", errorMsg);
-          
-          // Clean up the stack by popping the error message
-          lua_pop(L, 1); // Remove the error message from the stack
+      L = luaL_newstate();
+      luaL_openlibs(L);
 
-          lua_close(L); // Close the Lua state
-          printf("code_str >>> \n%s\n<<<\n", code_str);
-          assert(0 && "Error executing luaCode");
-        }
-    }
+      // Utility functions for rendering templates
+      const char *code_str = 
+        "getmetatable('').__index.render = function(template, vars)\n"
+        "  assert(type(template) == \"string\", \"template must be a string\")\n"
+        "  assert(type(vars) == \"table\", \"vars must be a table\")\n"
+        "  return (template:gsub(\"{{(.-)}}\", function(key)\n"
+        "    assert(vars[key], string.format(\"[render] key not found: %s\\n\\ttemplate_str is: %s\\n\", key, template))\n"
+        "    return tostring(vars[key] or \"\")\n"
+        "  end))\n"
+        "end\n";
 
-    // Execute the Lua string
-    if (luaL_dostring(L, str) != LUA_OK) {
+      if (luaL_dostring(L, code_str) != LUA_OK) {
         // If execution fails, get the error message
-        const char *errorMsg = lua_tostring(L, -1);
-        printf("Error executing Lua code: %s\n", errorMsg);
+        const char *err_msg = lua_tostring(L, -1);
+        printf("Error executing Lua code: %s\n", err_msg);
         
         // Clean up the stack by popping the error message
         lua_pop(L, 1); // Remove the error message from the stack
 
         lua_close(L); // Close the Lua state
-        printf("code_str >>> \n%s\n<<<\n", str);
+        printf("code_str >>> \n%s\n<<<\n", code_str);
         assert(0 && "Error executing luaCode");
+      }
+    }
+
+    // Execute the Lua string
+    if (luaL_dostring(L, str) != LUA_OK) {
+      // If execution fails, get the error message
+      const char *err_msg = lua_tostring(L, -1);
+      printf("[%s] Error executing Lua code: %s\n", code_name, err_msg);
+      
+      // Clean up the stack by popping the error message
+      lua_pop(L, 1); // Remove the error message from the stack
+
+      lua_close(L); // Close the Lua state
+      printf("code_str >>> \n%s\n<<<\n", str);
+      assert(0 && "Error executing luaCode");
     }
     
     if (lua_isstring(L, -1)) {
-        return lua_tostring(L, -1);
+      const char *ret_code = (char *)lua_tostring(L, -1);
+      if (verbose == 1) {
+        printf("[%s] do_lua_stiring ret_code >>> \n%s\n<<<\n", code_name, ret_code);
+      }
+      return ret_code;
     } else {
-        return "";
-        // assert(0 && "Error: Lua did not return a string");
+      return "";
     }
 }
 
