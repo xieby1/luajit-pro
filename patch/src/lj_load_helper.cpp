@@ -156,7 +156,8 @@ class CustomLuaTransformer {
 CustomLuaTransformer::CustomLuaTransformer(const std::string &filename) : filename_(filename) {
     fstream_ = std::ifstream(filename);
     if (!std::filesystem::exists(filename)) {
-        assert(false && std::string("[CustomLuaTransformer]FileUnable to open " + filename).c_str());
+        std::cout << "[CustomLuaTransformer] Unable to open " << filename << std::endl;
+        ASSERT(false);
     }
     stream_ = &fstream_;
 
@@ -892,7 +893,6 @@ void CustomLuaTransformer::parseInclude(int idx) {
     bracketCnt++;
     while (bracketCnt != 0) {
         auto token = tokenVec.at(_idx);
-        std::cout << token.startLine << " = " << token.data << std::endl;
 
         if (token.data == "(") {
             bracketCnt++;
@@ -972,7 +972,7 @@ void CustomLuaTransformer::parseInclude(int idx) {
         }
     }
 
-    std::cout << "get Include " << includeContent << std::endl;
+    // std::cout << "[Debug] get Include " << includeContent << std::endl;
 }
 
 void CustomLuaTransformer::parse(int idx) {
@@ -1069,7 +1069,8 @@ const char *file_transform(const char *filename, LuaDoStringPtr func) {
         }
     }
 
-    std::string newFileName = cacheDir + "/" + filename;
+    std::filesystem::path filepath(filename);
+    std::string newFileName = cacheDir + "/" + filepath.filename().string();
 
     std::string proccesedFile = newFileName + proccessedSuffix;
     std::string cppCMD        = std::string("cpp ") + filename + " -E | sed '/^#/d' > " + proccesedFile;
@@ -1091,10 +1092,10 @@ const char *file_transform(const char *filename, LuaDoStringPtr func) {
     transformer.parse(0);
     // transformer.dumpContentLines(false);
 
-    auto filepath = newFileName + transformedSuffix;
-    removeFiles.push_back(filepath);
+    auto finalFilepath = newFileName + transformedSuffix;
+    removeFiles.push_back(finalFilepath);
 
-    std::ofstream outFile(filepath, std::ios::trunc);
+    std::ofstream outFile(finalFilepath, std::ios::trunc);
     if (!outFile.is_open()) {
         assert(false && "Cannot write file!");
     }
@@ -1104,10 +1105,10 @@ const char *file_transform(const char *filename, LuaDoStringPtr func) {
     }
     outFile.close();
 
-    char *c_filepath = (char *)malloc(filepath.size() + 1);
+    char *c_filepath = (char *)malloc(finalFilepath.size() + 1);
     if (c_filepath) {
-        std::copy(filepath.begin(), filepath.end(), c_filepath);
-        c_filepath[filepath.size()] = '\0'; // Null-terminate
+        std::copy(finalFilepath.begin(), finalFilepath.end(), c_filepath);
+        c_filepath[finalFilepath.size()] = '\0'; // Null-terminate
     }
 
     return c_filepath;
