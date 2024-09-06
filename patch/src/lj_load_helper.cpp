@@ -3,9 +3,11 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <ostream>
 #include <regex>
 #include <sstream>
 #include <string>
@@ -13,7 +15,9 @@
 #include <unordered_set>
 #include <vector>
 
-typedef const char *(*LuaDoStringPtr)(const char*, const char *);
+#define LJ_PRO_CACHE_DIR "./.luajit_pro"
+
+typedef const char *(*LuaDoStringPtr)(const char *, const char *);
 
 #define ASSERT(condition, ...)                                                                                                                                                                                                                                                                                                                                                                                 \
     do {                                                                                                                                                                                                                                                                                                                                                                                                       \
@@ -1026,21 +1030,48 @@ extern "C" {
 using namespace lua_transformer;
 
 const char *file_transform(const char *filename, LuaDoStringPtr func) {
-    static bool isInit = false;
+    static std::string proccessedSuffix  = ".1.proccessed";
+    static std::string transformedSuffix = ".2.transformed";
+    static std::string cacheDir          = LJ_PRO_CACHE_DIR;
+    static bool isInit                   = false;
     if (!isInit) {
         isInit = true;
 
-        ludDoString = func;
+        luaDoString = func;
 
-        std::atexit([]() {
-            for (const auto &file : removeFiles) {
-                // std::cout << "[Debug][file_transform] remove => " << file << std::endl;
-                std::remove(file.c_str());
+        if (!std::filesystem::exists(cacheDir)) {
+            if (!std::filesystem::create_directory(cacheDir)) {
+                ASSERT(false, "Failed to create folder.");
             }
-        });
+        }
+
+        {
+            const char *value = std::getenv("LJP_KEEP_FILE");
+            if (value != nullptr && strcmp(value, "1") == 0) {
+                std::cout << "[luajit-pro] LJP_KEEP_FILE is enabled" << std::endl;
+            } else {
+                std::atexit([]() {
+                    for (const auto &file : removeFiles) {
+                        // std::cout << "[Debug][file_transform] remove => " << file << std::endl;
+                        std::remove(file.c_str());
+                    }
+                });
+            }
+        }
+
+        {
+            const char *value = std::getenv("LJP_WITH_PID_SUFFIX");
+            if (value != nullptr && strcmp(value, "1") == 0) {
+                std::cout << "[luajit-pro] LJP_WITH_PID_SUFFIX is enabled" << std::endl;
+                proccessedSuffix  = proccessedSuffix + "." + std::to_string((int)getpid());
+                transformedSuffix = transformedSuffix + "." + std::to_string((int)getpid());
+            }
+        }
     }
 
-    std::string proccesedFile = std::string(filename) + ".1.proccessed." + std::to_string((int)getpid());
+    std::string newFileName = cacheDir + "/" + filename;
+
+    std::string proccesedFile = newFileName + proccessedSuffix;
     std::string cppCMD        = std::string("cpp ") + filename + " -E | sed '/^#/d' > " + proccesedFile;
     std::system(cppCMD.c_str());
     removeFiles.push_back(proccesedFile);
@@ -1060,7 +1091,7 @@ const char *file_transform(const char *filename, LuaDoStringPtr func) {
     transformer.parse(0);
     // transformer.dumpContentLines(false);
 
-    auto filepath = std::string(filename) + ".2.transformed." + std::to_string((int)getpid());
+    auto filepath = newFileName + transformedSuffix;
     removeFiles.push_back(filepath);
 
     std::ofstream outFile(filepath, std::ios::trunc);
