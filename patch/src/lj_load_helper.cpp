@@ -1069,11 +1069,37 @@ const char *file_transform(const char *filename, LuaDoStringPtr func) {
         }
     }
 
+    std::ifstream inputFile(filename);
+    if (!inputFile) {
+        assert(false && "Cannot open file!");
+    }
+
+    bool disablePreprocess = false;
+    std::string firstLine;
+    if (std::getline(inputFile, firstLine)) {
+        // std::cout << "[Debug] first line => " << firstLine << std::endl;
+        std::regex pattern(R"(preprocess:\s*(\w+))"); // You can DISABLE preprocess by adding "preprocess: false" at the first line of the file after the "--[[verilua]]" comment. e.g. "--[[verilua]] preprocess: false"
+        std::smatch matches;
+
+        if (std::regex_search(firstLine, matches, pattern)) {
+            disablePreprocess = matches[1] == "false";
+        }
+    } else {
+        assert(false && "Cannot read file!");
+    }
+    inputFile.close();
+
     std::filesystem::path filepath(filename);
     std::string newFileName = cacheDir + "/" + filepath.filename().string();
 
     std::string proccesedFile = newFileName + proccessedSuffix;
-    std::string cppCMD        = std::string("cpp ") + filename + " -E | sed '/^#/d' > " + proccesedFile;
+    std::string cppCMD        = "";
+    if (disablePreprocess) {
+        std::cout << "[luajit-pro] preprocess is disabled" << std::endl;
+        cppCMD = std::string("cp ") + filename + " " + proccesedFile;
+    } else {
+        cppCMD = std::string("cpp ") + filename + " -E | sed '/^#/d' > " + proccesedFile;
+    }
     std::system(cppCMD.c_str());
     removeFiles.push_back(proccesedFile);
 
