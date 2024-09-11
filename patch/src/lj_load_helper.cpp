@@ -172,10 +172,10 @@ CustomLuaTransformer::CustomLuaTransformer(const std::string &filename) : filena
         oldContentLines.push_back(line);
     }
 
-    if (oldContentLines[0].find(std::string("--[[verilua]]")) == std::string::npos) {
+    if (oldContentLines[0].find(std::string("--[[luajit-pro]]")) == std::string::npos) {
         throw std::runtime_error("File does not contain verilua comment in first line");
     } else {
-        oldContentLines[0] = "--[[verilua]] local ipairs, _tinsert = ipairs, table.insert";
+        oldContentLines[0] = "--[[luajit-pro]] local ipairs, _tinsert = ipairs, table.insert";
     }
 
     file.close();
@@ -1078,7 +1078,7 @@ const char *file_transform(const char *filename, LuaDoStringPtr func) {
     std::string firstLine;
     if (std::getline(inputFile, firstLine)) {
         // std::cout << "[Debug] first line => " << firstLine << std::endl;
-        std::regex pattern(R"(preprocess:\s*(\w+))"); // You can DISABLE preprocess by adding "preprocess: false" at the first line of the file after the "--[[verilua]]" comment. e.g. "--[[verilua]] preprocess: false"
+        std::regex pattern(R"(preprocess:\s*(\w+))"); // You can DISABLE preprocess by adding "preprocess: false" at the first line of the file after the "--[[luajit-pro]]" comment. e.g. "--[[luajit-pro]] preprocess: false"
         std::smatch matches;
 
         if (std::regex_search(firstLine, matches, pattern)) {
@@ -1095,7 +1095,7 @@ const char *file_transform(const char *filename, LuaDoStringPtr func) {
     std::string proccesedFile = newFileName + proccessedSuffix;
     std::string cppCMD        = "";
     if (disablePreprocess) {
-        std::cout << "[luajit-pro] preprocess is disabled" << std::endl;
+        std::cout << "[luajit-pro] preprocess is disabled in file: " << filename << std::endl;
         cppCMD = std::string("cp ") + filename + " " + proccesedFile;
     } else {
         cppCMD = std::string("cpp ") + filename + " -E | sed '/^#/d' > " + proccesedFile;

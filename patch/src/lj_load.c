@@ -179,7 +179,7 @@ static const char *reader_file(lua_State *L, void *ud, size_t *size)
     ctx->is_first_access = 0;
 
     char first_line_buffer[256];
-    const char* substring = "--[[verilua]]";
+    const char* substring = "--[[luajit-pro]]";
 
     if (fgets(first_line_buffer, sizeof(first_line_buffer), ctx->fp) != NULL) {
       if (strstr(first_line_buffer, substring) != NULL) {
@@ -189,7 +189,7 @@ static const char *reader_file(lua_State *L, void *ud, size_t *size)
         ctx->fp = fopen(new_file, "rb");
         free(new_file);
       } else {
-        // The read file did not contains "--[[verilua]]"
+        // The read file did not contains "--[[luajit-pro]]"
       }
       fseek(ctx->fp, 0, SEEK_SET);
     } else {

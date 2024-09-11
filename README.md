@@ -20,9 +20,9 @@ bash init.sh
 The default install path is the [luajit2 path](luajit2) itself. You can change the install path by setting the `install_dir` in [install_luajit.sh](install_luajit.sh).
 
 ## Examples
-To enable the extra syntax, we need to add a directive(i.e. `"--[[verilua]]"`) to the Lua code file at fist line.
+To enable the extra syntax, we need to add a directive(i.e. `"--[[luajit-pro]]"`) to the Lua code file at fist line.
 ```Lua
---[[verilua]]
+--[[luajit-pro]]
 
 --
 -- Other codes...
@@ -30,7 +30,7 @@ To enable the extra syntax, we need to add a directive(i.e. `"--[[verilua]]"`) t
 ```
 ### Preprocess
 ```Lua
----[[verilua]]
+---[[luajit-pro]]
 
 #define PRINT(X) print(__LINE__, X)
 
@@ -50,7 +50,7 @@ PRINT("HELLO")
 The metaprogramming code block is started with `$comp_time` and the content is inside the `{}`. The code inside the block will be executed at compile time and the result will be inserted into the original code.
 
 ```Lua
----[[verilua]]
+---[[luajit-pro]]
 
 $comp_time {
     f = string.format

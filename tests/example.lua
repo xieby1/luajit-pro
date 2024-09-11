@@ -1,4 +1,4 @@
---[[verilua]]
+--[[luajit-pro]]
 
 local tbl = {1, 2, 3, 4}
 
@@ -59,7 +59,7 @@ $comp_time    {
 $comp_time{
     ret = ""
     for i = 1, 2 do 
-        ret = ret .. f("print(\"%s\", %d)", "from 2comp_time", i)
+        ret = ret .. f("print(\"{{name}}: %s\", %d)", "from 2comp_time", i):render({name = "aaa"})
     end
     return ret
 }
