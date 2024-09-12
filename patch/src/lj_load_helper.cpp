@@ -27,6 +27,8 @@ typedef const char *(*LuaDoStringPtr)(const char *, const char *);
         }                                                                                                                                                                                                                                                                                                                                                                                                      \
     } while (0)
 
+extern "C" const char *file_transform(const char *filename, LuaDoStringPtr func);
+
 namespace lua_transformer {
 std::vector<std::string> removeFiles;
 
@@ -123,6 +125,7 @@ class CustomLuaTransformer {
     void dumpContentLines(bool hasLineNumbers);
 
   private:
+    bool isFirstToken = true;
     std::istream *stream_;
     std::ifstream fstream_;
     std::string filename_;
@@ -156,7 +159,7 @@ class CustomLuaTransformer {
 CustomLuaTransformer::CustomLuaTransformer(const std::string &filename) : filename_(filename) {
     fstream_ = std::ifstream(filename);
     if (!std::filesystem::exists(filename)) {
-        std::cout << "[CustomLuaTransformer] Unable to open " << filename << std::endl;
+        std::cout << "[CustomLuaTransformer] file does not exist:" << filename << std::endl;
         ASSERT(false);
     }
     stream_ = &fstream_;
@@ -165,7 +168,8 @@ CustomLuaTransformer::CustomLuaTransformer(const std::string &filename) : filena
     std::string line;
 
     if (!file.is_open()) {
-        throw std::runtime_error("Unable to open file");
+        std::cout << "[CustomLuaTransformer] Unable to open " << filename << std::endl;
+        ASSERT(false);
     }
 
     while (std::getline(file, line)) {
@@ -173,7 +177,7 @@ CustomLuaTransformer::CustomLuaTransformer(const std::string &filename) : filena
     }
 
     if (oldContentLines[0].find(std::string("--[[luajit-pro]]")) == std::string::npos) {
-        throw std::runtime_error("File does not contain verilua comment in first line");
+        assert(0 && "File does not contain verilua comment in first line");
     } else {
         oldContentLines[0] = "--[[luajit-pro]] local ipairs, _tinsert = ipairs, table.insert";
     }
@@ -318,9 +322,8 @@ Token CustomLuaTransformer::_nextToken() {
 }
 
 Token CustomLuaTransformer::nextToken() {
-    static bool isFirst = true;
-    if (isFirst) {
-        isFirst = false;
+    if (isFirstToken) {
+        isFirstToken = false;
     } else {
         tokenVecIdx++;
     }
@@ -915,7 +918,7 @@ void CustomLuaTransformer::parseInclude(int idx) {
     std::string luaCode = std::string("return assert(package.searchpath(") + includePackage + ", package.path))";
     auto includeFile    = luaDoString(std::string(filename_ + "/include" + ":" + std::to_string(includeToken.startLine)).c_str(), luaCode.c_str());
 
-    std::ifstream file(includeFile);
+    std::ifstream file(file_transform(includeFile, luaDoString));
     std::string includeContent = "";
 
     if (file.is_open()) {
@@ -1074,6 +1077,8 @@ const char *file_transform(const char *filename, LuaDoStringPtr func) {
         assert(false && "Cannot open file!");
     }
 
+    // std::cout << "[Debug] inputFile => " << filename << std::endl;
+
     bool disablePreprocess = false;
     std::string firstLine;
     if (std::getline(inputFile, firstLine)) {
@@ -1083,6 +1088,11 @@ const char *file_transform(const char *filename, LuaDoStringPtr func) {
 
         if (std::regex_search(firstLine, matches, pattern)) {
             disablePreprocess = matches[1] == "false";
+        }
+
+        if (firstLine.find("--[[luajit-pro]]") == std::string::npos) {
+            // std::cout << "[luajit-pro] File: "<< filename << " does not contain the required comment: \"--[[luajit-pro]]\" at the first line." << std::endl;
+            return filename;
         }
     } else {
         assert(false && "Cannot read file!");
@@ -1103,25 +1113,22 @@ const char *file_transform(const char *filename, LuaDoStringPtr func) {
     std::system(cppCMD.c_str());
     removeFiles.push_back(proccesedFile);
 
-    std::ifstream file(proccesedFile);
-
+    // std::ifstream file(proccesedFile);
     // std::string line;
     // while (std::getline(file, line)) {
     //     std::cout << "[Debug] get => " << line << std::endl;
     // }
-
-    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    file.close();
+    // file.close();
 
     CustomLuaTransformer transformer(proccesedFile);
     transformer.tokenize();
     transformer.parse(0);
     // transformer.dumpContentLines(false);
 
-    auto finalFilepath = newFileName + transformedSuffix;
-    removeFiles.push_back(finalFilepath);
+    auto finalFilePath = newFileName + transformedSuffix;
+    removeFiles.push_back(finalFilePath);
 
-    std::ofstream outFile(finalFilepath, std::ios::trunc);
+    std::ofstream outFile(finalFilePath, std::ios::trunc);
     if (!outFile.is_open()) {
         assert(false && "Cannot write file!");
     }
@@ -1131,10 +1138,10 @@ const char *file_transform(const char *filename, LuaDoStringPtr func) {
     }
     outFile.close();
 
-    char *c_filepath = (char *)malloc(finalFilepath.size() + 1);
+    char *c_filepath = (char *)malloc(finalFilePath.size() + 1);
     if (c_filepath) {
-        std::copy(finalFilepath.begin(), finalFilepath.end(), c_filepath);
-        c_filepath[finalFilepath.size()] = '\0'; // Null-terminate
+        std::copy(finalFilePath.begin(), finalFilePath.end(), c_filepath);
+        c_filepath[finalFilePath.size()] = '\0'; // Null-terminate
     }
 
     return c_filepath;

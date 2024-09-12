@@ -56,8 +56,8 @@ const char *do_lua_stiring(const char *code_name, const char *str) {
         "local purple = \"\\27[35m\"\n"
         "local reset = \"\\27[0m\"\n"
         "local old_print = print\n"
-        "function print(...) old_print(purple .. \"[compTime]\" .. reset, ...) end\n"
-        "function printf(...) io.write(purple .. \"[compTime]\" .. reset .. \"\t\" .. string.format(...)) end\n"
+        "function print(...) old_print(purple .. \"[comp_time]\" .. reset, ...) end\n"
+        "function printf(...) io.write(purple .. \"[comp_time]\" .. reset .. \"\t\" .. string.format(...)) end\n"
         "env_vars = {}\n"
         "setmetatable(env_vars, {\n"
         "    __index = function(table, key)\n"
@@ -87,7 +87,7 @@ const char *do_lua_stiring(const char *code_name, const char *str) {
         lua_pop(L, 1); // Remove the error message from the stack
 
         lua_close(L); // Close the Lua state
-        printf("code_str " RESET_COLOR ">>>\n%s\n<<<" RESET_COLOR "\n", code_str);
+        printf("code_str " PURPLE_COLOR ">>>\n%s\n<<<" RESET_COLOR "\n", code_str);
         assert(0 && "Error executing luaCode");
       }
     }
@@ -102,7 +102,7 @@ const char *do_lua_stiring(const char *code_name, const char *str) {
       lua_pop(L, 1); // Remove the error message from the stack
 
       lua_close(L); // Close the Lua state
-      printf("code_str >>> \n%s\n<<<\n", str);
+      printf("code_str >>> " PURPLE_COLOR "\n%s\n" RESET_COLOR "<<<\n", str);
       assert(0 && "Error executing luaCode");
     }
     

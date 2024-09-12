@@ -66,3 +66,5 @@ $comp_time{
     end
     return ret
 }
+
+$include("inc")
