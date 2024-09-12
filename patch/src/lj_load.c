@@ -27,6 +27,9 @@
 #include "assert.h"
 #include <stdlib.h>
 
+#define PURPLE_COLOR "\033[35m"
+#define RESET_COLOR "\033[0m"
+
 typedef const char *(* LuaDoStringPtr)(const char*, const char*);
 char *file_transform(const char *filename, LuaDoStringPtr func);
 void string_transform(const char *str, size_t *output_size);
@@ -48,8 +51,24 @@ const char *do_lua_stiring(const char *code_name, const char *str) {
       L = luaL_newstate();
       luaL_openlibs(L);
 
-      // Utility functions for rendering templates
+      // Preload the code that will be used to transform the code
       const char *code_str = 
+        "local purple = \"\\27[35m\"\n"
+        "local reset = \"\\27[0m\"\n"
+        "local old_print = print\n"
+        "function print(...) old_print(purple .. \"[compTime]\" .. reset, ...) end\n"
+        "function printf(...) io.write(purple .. \"[compTime]\" .. reset .. \"\t\" .. string.format(...)) end\n"
+        "env_vars = {}\n"
+        "setmetatable(env_vars, {\n"
+        "    __index = function(table, key)\n"
+        "       local value = os.getenv(key)\n"
+        "       if value == nil then\n"
+        "         printf(\"[warn] env_vars[%s] is nill!\\n\", key)\n"
+        "       end\n"
+        "       return os.getenv(key)\n"
+        "   end,\n"
+        "   --[[__newindex = function(table, key, value) os.setenv(key, value) end]]\n" // TODO: 
+        "})\n"
         "getmetatable('').__index.render = function(template, vars)\n"
         "  assert(type(template) == \"string\", \"template must be a string\")\n"
         "  assert(type(vars) == \"table\", \"vars must be a table\")\n"
@@ -68,7 +87,7 @@ const char *do_lua_stiring(const char *code_name, const char *str) {
         lua_pop(L, 1); // Remove the error message from the stack
 
         lua_close(L); // Close the Lua state
-        printf("code_str >>> \n%s\n<<<\n", code_str);
+        printf("code_str " RESET_COLOR ">>>\n%s\n<<<" RESET_COLOR "\n", code_str);
         assert(0 && "Error executing luaCode");
       }
     }
@@ -90,7 +109,7 @@ const char *do_lua_stiring(const char *code_name, const char *str) {
     if (lua_isstring(L, -1)) {
       const char *ret_code = (char *)lua_tostring(L, -1);
       if (verbose == 1) {
-        printf("[%s] do_lua_stiring ret_code >>> \n%s\n<<<\n", code_name, ret_code);
+        printf("[%s] do_lua_stiring ret_code " PURPLE_COLOR ">>>\n%s\n<<<" RESET_COLOR "\n", code_name, ret_code);
       }
       return ret_code;
     } else {

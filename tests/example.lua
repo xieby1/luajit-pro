@@ -59,6 +59,9 @@ $comp_time    {
 $comp_time{
     ret = ""
     for i = 1, 2 do 
+        printf("hello => %d\n", i)
+        print("world", i)
+        print(env_vars["B"])
         ret = ret .. f("print(\"{{name}}: %s\", %d)", "from 2comp_time", i):render({name = "aaa"})
     end
     return ret
