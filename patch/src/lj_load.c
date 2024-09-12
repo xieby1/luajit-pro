@@ -56,6 +56,7 @@ const char *do_lua_stiring(const char *code_name, const char *str) {
         "local purple = \"\\27[35m\"\n"
         "local reset = \"\\27[0m\"\n"
         "local old_print = print\n"
+        "package.path = package.path .. \";?.lua\" \n"
         "function print(...) old_print(purple .. \"[comp_time]\" .. reset, ...) end\n"
         "function printf(...) io.write(purple .. \"[comp_time]\" .. reset .. \"\t\" .. string.format(...)) end\n"
         "env_vars = {}\n"
@@ -76,6 +77,14 @@ const char *do_lua_stiring(const char *code_name, const char *str) {
         "    assert(vars[key], string.format(\"[render] key not found: %s\\n\\ttemplate_str is: %s\\n\", key, template))\n"
         "    return tostring(vars[key] or \"\")\n"
         "  end))\n"
+        "end\n"
+        "getmetatable('').__index.strip = function(str, suffix)\n"
+        "  assert(type(suffix) == \"string\", \"suffix must be a string\")\n"
+        "  if str:sub(-#suffix) == suffix then\n"
+        "    return str:sub(1, -#suffix - 1)\n"
+        "  else\n"
+        "    return str\n"
+        "  end\n"
         "end\n";
 
       if (luaL_dostring(L, code_str) != LUA_OK) {
