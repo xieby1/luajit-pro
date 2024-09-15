@@ -177,7 +177,8 @@ CustomLuaTransformer::CustomLuaTransformer(const std::string &filename) : filena
     }
 
     if (oldContentLines[0].find(std::string("--[[luajit-pro]]")) == std::string::npos) {
-        assert(0 && "File does not contain verilua comment in first line");
+        std::cout << "[CustomLuaTransformer] File does not contain verilua comment in first line: " << filename << std::endl;
+        assert(0);
     } else {
         oldContentLines[0] = "--[[luajit-pro]] local ipairs, _tinsert = ipairs, table.insert";
     }
@@ -1108,7 +1109,7 @@ const char *file_transform(const char *filename, LuaDoStringPtr func) {
         std::cout << "[luajit-pro] preprocess is disabled in file: " << filename << std::endl;
         cppCMD = std::string("cp ") + filename + " " + proccesedFile;
     } else {
-        cppCMD = std::string("cpp ") + filename + " -E | sed '/^#/d' > " + proccesedFile;
+        cppCMD = std::string("cpp ") + filename + " -E | sed '/^#/d' > " + proccesedFile; // `-E`: Preprocess only
     }
     std::system(cppCMD.c_str());
     removeFiles.push_back(proccesedFile);
